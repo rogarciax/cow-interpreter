@@ -115,11 +115,11 @@ mOo:
 moO:
 	pushl %eax
 	movl programMem, %eax
-	shl 2, %eax
+	shll $2, %eax
 
 	/* if (currentCel > programMem / 4) */
 	cmpl %eax, currentCell
-	jle endmOo
+	jle endmoO
 
 	cellOverflowErr:
 	pushl %eax
@@ -135,7 +135,7 @@ moO:
 	popl %ecx
 	popl %edx
 
-	endmOo:
+	endmoO:
 	/* currentCell++; */
 	incl currentCell
 	popl %eax
@@ -145,20 +145,41 @@ mOO:
 	ret
 
 Moo:
-	movl currentCel, %edi
-	movl programMem(, %edi, 4), %eax
+	pushl %eax
+	pushl %ecx
+	pushl %edx
+	pushl %ebx
+	pushl %edi
 
-	cmpl
+	movl currentCell, %edi
+	leal programMem(, %edi, 4), %ebx
 
+	cmpl $0, (%ebx)
+	je readASCIIChar
+
+	printASCIIchar:
+	pushl (%ebx)
+	call putc
+	addl $4, %esp
+
+	jmp endMoo
+
+	readASCIIChar:
+	call getchar
+	movl %eax, (%ebx)
+
+	endMoo:
+	popl %edi
+	popl %ebx
+	popl %edx
+	popl %ecx
+	popl %eax
 	ret
 
 MOo:
 	ret
 
 MoO:
-	ret
-
-MOO:
 	ret
 
 MOO:

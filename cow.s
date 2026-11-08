@@ -1,34 +1,40 @@
 .data
-	cowFileErr: 	 .string "\033[38:5:1m[ERROR]\033[m: file with path '%s' was not found in the system.\n"
-	programUsageMsg: .string "\033[38:5:3mMissing cow file path!\033[m\nUsage: ./cow <program>.cow\n"
-	cellUnderflowMsg:.string "\033[38:5:1m[ERROR]\033[m: tried to move back to a cell out of bounds \033[38:5:237m(underflow)\033[m."
-	cellOverflowMsg: .string "\033[38:5:1m[ERROR]\033[m: tried to move forward to a cell out of bounds \033[38:5:237m(overflow)\033[m."
-	fileMode:		 .string "r"
+	/* Error messages */
+	cowFileErr: 	 		.string "\033[38:5:1m[ERROR]\033[m: file with path '%s' was not found in the system.\n"
+	programUsageMsg: 		.string "\033[38:5:3mMissing cow file path!\033[m\nUsage: ./cow <program>.cow\n"
+	cellUnderflowMsg:		.string "\033[38:5:1m[ERROR]\033[m: tried to move back to a cell out of bounds \033[38:5:237m(CellUnderflow)\033[m."
+	cellOverflowMsg:		.string "\033[38:5:1m[ERROR]\033[m: tried to move forward to a cell out of bounds \033[38:5:237m(CellOverflow)\033[m."
+	outOfBoundsInstIdxMsg: 	.string "\033[38:5:1m[ERROR]\033[m: tried to execute instruction with index: %d (min 0, max 11) \033[38:5:237m(InstIdxOutOfBounds)\033[m."
+
+
+	/* File ops vars */
+	fileMode:				.string "r"
 	
-	cowInstSet:		 .string "moo", "mOo", "moO", "mOO"
-					 .string "Moo", "MOo", "MoO", "MOO"
-					 .string "OOO", "MMM", "OOM", "oom"
+	/* Interpreter vars */
+	cowInstSet:				.string "moo", "mOo", "moO", "mOO"
+					 		.string "Moo", "MOo", "MoO", "MOO"
+					 		.string "OOO", "MMM", "OOM", "oom"
 
-	cowInstJmps:	 .long moo
-					 .long mOo
-					 .long moO
-					 .long mOO
+	cowInstJmps:			.long moo
+							.long mOo
+							.long moO
+							.long mOO
 
-					 .long Moo
-					 .long MOo
-					 .long MoO
-					 .long MOO
+							.long Moo
+							.long MOo
+							.long MoO
+							.long MOO
 
-					 .long MOO
-					 .long OOO
-					 .long OOM
-					 .long oom
+							.long MOO
+							.long OOO
+							.long OOM
+							.long oom
 
-	instFormatStr: 	 .string "%3c"
+	instFormatStr: 			.string "%3c"
 
-	currentCell: 	 .int 0
-	programMem: 	 .space 4096
-	cpyReg:			 .int 0
+	currentCell: 			.int 0
+	programMem: 			.space 4096
+	cpyReg:					.int 0
 
 .text
 	.global main
@@ -88,13 +94,14 @@ lower:
 moo:
 	ret
 
+/* int mOo() */
 mOo:
 	/* if (currentCell == 0) */
 	cmpl $0, currentCell
 	jne endmOo
+	movl $0, %eax /* to return 0 on success */
 
 	cellUnderflowErr:
-	pushl %eax
 	pushl %ecx
 	pushl %edx
 
@@ -102,8 +109,8 @@ mOo:
 	pushl $cellUnderflowMsg
 	call printf
 	addl $4, %esp
+	movl $1, %eax /* to return 1 on failure */
 
-	popl %eax
 	popl %ecx
 	popl %edx
 
@@ -112,17 +119,18 @@ mOo:
 	decl currentCell
 	ret
 
+/* int moO() */
 moO:
-	pushl %eax
 	movl programMem, %eax
 	shll $2, %eax
+
+	movl $0, %eax /* to return 0 on success */
 
 	/* if (currentCel > programMem / 4) */
 	cmpl %eax, currentCell
 	jle endmoO
 
 	cellOverflowErr:
-	pushl %eax
 	pushl %ecx
 	pushl %edx
 
@@ -130,34 +138,72 @@ moO:
 	pushl $cellOverflowMsg
 	call printf
 	addl $4, %esp
+	movl $1, %eax /* to return 1 on failure */
 
-	popl %eax
 	popl %ecx
 	popl %edx
 
 	endmoO:
 	/* currentCell++; */
 	incl currentCell
-	popl %eax
 	ret
 
+/* int mOO() */
 mOO:
+	pushl %edi
+	pushl %ebx
+
+	movl currentCell, %edi
+	/* "%ebx" = programMem[currentCell]; */
+	movl programMem(, %edi, 4), %ebx
+
+	movl $0, %eax /* to return 0 on success */
+
+	/* if ("%ebx" >= 0 && "%ebx" <= 11) */
+	cmpl $0, %ebx
+	jl outOfBoundsInstIdxErr
+
+	cmpl $11, %ebx
+	jg outOfBoundsInstIdxErr
+
+	/* cowInstJmps["%ebx"](); */
+	call *cowInstJmps(, %ebx, 4)
+	jmp endmOO
+
+	outOfBoundsInstIdxErr:
+	pushl %ecx
+	pushl %edx
+
+	/* printf(\033[38:5:1m[ERROR]\033[m: tried to execute instruction with index: %d (min 0, max 11) \033[38:5:237m(InstIdxOutOfBounds)\033[m.) */
+	pushl $outOfBoundsInstIdxMsg
+	call printf
+	addl $4, %esp
+	movl $1, %eax /* to return 1 on failure */
+
+	popl %edx
+	popl %ecx
+
+	endmOO:
+	popl %ebx
+	popl %edi
 	ret
 
+/* int Moo() */
 Moo:
-	pushl %eax
 	pushl %ecx
 	pushl %edx
 	pushl %ebx
 	pushl %edi
 
 	movl currentCell, %edi
+	/* "%ebx" = *programMem[currentCell]; */
 	leal programMem(, %edi, 4), %ebx
 
 	cmpl $0, (%ebx)
 	je readASCIIChar
 
 	printASCIIchar:
+	/* putc(*"%ebx") */
 	pushl (%ebx)
 	call putc
 	addl $4, %esp
@@ -165,6 +211,7 @@ Moo:
 	jmp endMoo
 
 	readASCIIChar:
+	/* "%ebx" = getchar() */
 	call getchar
 	movl %eax, (%ebx)
 
@@ -173,13 +220,28 @@ Moo:
 	popl %ebx
 	popl %edx
 	popl %ecx
-	popl %eax
+	/* return 0; */
+	movl $0, %eax
 	ret
 
 MOo:
+	pushl %edi
+
+	movl currentCell, %edi
+	incl programMem(, %edi, 4)
+	movl $0, %eax
+
+	popl %edi
 	ret
 
 MoO:
+	pushl %edi
+
+	movl currentCell, %edi
+	decl programMem(, %edi, 4)
+	movl $0, %eax
+
+	popl %edi
 	ret
 
 MOO:

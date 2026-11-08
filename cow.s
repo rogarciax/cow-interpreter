@@ -2,10 +2,9 @@
 	/* Error messages */
 	cowFileErr: 	 		.string "\033[38:5:1m[ERROR]\033[m: file with path '%s' was not found in the system.\n"
 	programUsageMsg: 		.string "\033[38:5:3mMissing cow file path!\033[m\nUsage: ./cow <program>.cow\n"
-	cellUnderflowMsg:		.string "\033[38:5:1m[ERROR]\033[m: tried to move back to a cell out of bounds \033[38:5:237m(CellUnderflow)\033[m."
-	cellOverflowMsg:		.string "\033[38:5:1m[ERROR]\033[m: tried to move forward to a cell out of bounds \033[38:5:237m(CellOverflow)\033[m."
-	outOfBoundsInstIdxMsg: 	.string "\033[38:5:1m[ERROR]\033[m: tried to execute instruction with index: %d (min 0, max 11) \033[38:5:237m(InstIdxOutOfBounds)\033[m."
-
+	cellUnderflowMsg:		.string "\033[38:5:1m[ERROR]\033[m: tried to move back to a cell out of bounds \033[38:5:239m(CellUnderflow)\033[m.\n"
+	cellOverflowMsg:		.string "\033[38:5:1m[ERROR]\033[m: tried to move forward to a cell out of bounds \033[38:5:239m(CellOverflow)\033[m.\n"
+	outOfBoundsInstIdxMsg: 	.string "\033[38:5:1m[ERROR]\033[m: tried to execute instruction with index: %d (min 0, max 11) \033[38:5:239m(InstIdxOutOfBounds)\033[m.\n"
 
 	/* File ops vars */
 	fileMode:				.string "r"
@@ -33,6 +32,7 @@
 	instFormatStr: 			.string "%3c"
 
 	currentCell: 			.int 0
+	totalCells: 			.int 1024
 	programMem: 			.space 4096
 	cpyReg:					.int 0
 
@@ -121,13 +121,13 @@ mOo:
 
 /* int moO() */
 moO:
-	movl programMem, %eax
-	shll $2, %eax
+	pushl %ebx
+	movl totalCells, %ebx
 
 	movl $0, %eax /* to return 0 on success */
 
 	/* if (currentCel > programMem / 4) */
-	cmpl %eax, currentCell
+	cmpl %ebx, currentCell
 	jle endmoO
 
 	cellOverflowErr:
@@ -146,6 +146,7 @@ moO:
 	endmoO:
 	/* currentCell++; */
 	incl currentCell
+	popl %ebx
 	ret
 
 /* int mOO() */
@@ -159,12 +160,12 @@ mOO:
 
 	movl $0, %eax /* to return 0 on success */
 
-	/* if ("%ebx" >= 0 && "%ebx" <= 11) */
+	/* if ("%ebx" >= 0 && "%ebx" < 12) */
 	cmpl $0, %ebx
 	jl outOfBoundsInstIdxErr
 
-	cmpl $11, %ebx
-	jg outOfBoundsInstIdxErr
+	cmpl $12, %ebx
+	jge outOfBoundsInstIdxErr
 
 	/* cowInstJmps["%ebx"](); */
 	call *cowInstJmps(, %ebx, 4)
@@ -203,9 +204,9 @@ Moo:
 	je readASCIIChar
 
 	printASCIIchar:
-	/* putc(*"%ebx") */
+	/* putchar(*"%ebx") */
 	pushl (%ebx)
-	call putc
+	call putchar
 	addl $4, %esp
 
 	jmp endMoo
@@ -224,21 +225,23 @@ Moo:
 	movl $0, %eax
 	ret
 
+/* int MOo() */
 MOo:
 	pushl %edi
 
 	movl currentCell, %edi
-	incl programMem(, %edi, 4)
+	decl programMem(, %edi, 4)
 	movl $0, %eax
 
 	popl %edi
 	ret
 
+/* int MoO() */
 MoO:
 	pushl %edi
 
 	movl currentCell, %edi
-	decl programMem(, %edi, 4)
+	incl programMem(, %edi, 4)
 	movl $0, %eax
 
 	popl %edi
@@ -289,15 +292,23 @@ processCowFile:
 
 	/* if ("%eax" != 'm' || "%eax" != 'o') */
 	cmpl $'m', %eax
-	jne readChar
+	je readInst
 
 	cmpl $'o', %eax
-	jne readChar
 	/* continue; */
+	jne continueReadChar
+
+	readInst:
+	/* ftell(filePtr, -1, SEEK_CUR); */
+	pushl $1 /* SEEK_CUR */
+	pushl $-1
+	pushl 8(%ebp)
+	call fseek
+	addl $12, %esp
 
 	/* fscanf(filePtr, "%3c", instBuff); */
 	pushl -4(%ebp)
-	pushl instFormatStr
+	pushl $instFormatStr
 	pushl 8(%ebp)
 	call fscanf
 	addl $12, %esp
@@ -316,22 +327,32 @@ processCowFile:
 	/* if (strncmp(instBuff, cowInstset[i], 3) != 0) */
 	cmpl $0, %eax
 	/* continue; */
-	jne checkNextInst
+	jne incInstIdx
 
 	/* "%eax" = cowInstSet[i](); */
-	call *cowInstSet(, %edi, 4)
+	call *cowInstJmps(, %edi, 4)
 
 	cmpl $0, %eax
 	jne endProcessCowFile
+	movl $12, %edi /* To exit the loop */
 
+	incInstIdx:
 	/* i++ */
 	incl %edi
 	
-	/* } while (i <= 12); */
+	/* } while (i < 12); */
 	cmpl $12, %edi
-	jg readChar
+	jl checkNextInst
+
+	continueReadChar:
+	jmp readChar
 
 	endProcessCowFile:
+	/* free(instBuff); */
+	pushl -4(%ebp)
+	call free
+	addl $4, %esp
+
 	popl %edi
 	popl %ebx
 	popl %edx

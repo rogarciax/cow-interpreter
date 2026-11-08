@@ -318,8 +318,11 @@ processCowFile:
 	/* continue; */
 	jne checkNextInst
 
-	/* cowInstSet[i](); */
+	/* "%eax" = cowInstSet[i](); */
 	call *cowInstSet(, %edi, 4)
+
+	cmpl $0, %eax
+	jne endProcessCowFile
 
 	/* i++ */
 	incl %edi

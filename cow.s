@@ -24,17 +24,23 @@
 							.long MoO
 							.long MOO
 
-							.long MOO
 							.long OOO
+							.long MMM
 							.long OOM
 							.long oom
 
+	/* Printf formats */
 	instFormatStr: 			.string "%3c"
+	intFormatStr:		.string "%d"
 
+	/* Cell addressing vars */
 	currentCell: 			.int 0
 	totalCells: 			.int 1024
 	programMem: 			.space 4096
+
+	/* Copy register vars */
 	cpyReg:					.int 0
+	cpyRegState:			.byte 0 /* 1 occupied, 0 empty */
 
 .text
 	.global main
@@ -91,6 +97,7 @@ lower:
 	leave
 	ret
 
+/* int moo() */
 moo:
 	ret
 
@@ -229,8 +236,10 @@ Moo:
 MOo:
 	pushl %edi
 
+	/* programMem[currentCell]--; */
 	movl currentCell, %edi
 	decl programMem(, %edi, 4)
+	/* return 0; */
 	movl $0, %eax
 
 	popl %edi
@@ -240,23 +249,106 @@ MOo:
 MoO:
 	pushl %edi
 
+	/* programMem[currentCell]++; */
 	movl currentCell, %edi
 	incl programMem(, %edi, 4)
+	/* return 0; */
 	movl $0, %eax
 
 	popl %edi
 	ret
 
+/* int MOO() */
 MOO:
 	ret
 
+/* int OOO() */
 OOO:
+	pushl %edi
+	pushl %ebx
+
+	/* programMem[currentCell] = 0; */
+	movl currentCell, %edi
+	leal programMem(, %edi, 4), %ebx
+	movl $0, (%ebx)
+	/* return 0; */
+	movl $0, %eax
+	
+	popl %ebx
+	popl %edi
 	ret
 
+/* int MMM() */
+MMM:
+	pushl %edi
+	pushl %ebx
+
+	mov currentCell, %edi
+
+	cmpl $1, cpyRegState
+	je copyValIntoCell
+	
+	copyValIntoReg:
+	movl programMem(, %edi, 4), %ebx
+	/* cpyReg = programMem[currentCell]; */
+	movl %ebx, cpyReg
+	/* cpyRegState = 1 */
+	movl $1, cpyRegState
+	jmp endMMM
+
+	copyValIntoCell:
+	leal programMem(, %edi, 4), %ebx
+	/* programMem[currentCell] = cpyReg; */
+	movl cpyReg, %eax
+	movl %eax, (%ebx)
+	/* cpyRegState = 0 */
+	movl $0, cpyRegState
+
+	endMMM:
+	/* return 0 */
+	movl $0, %eax
+	popl %ebx
+	popl %edi
+	ret
+
+/* int OOM() */
 OOM:
+	pushl %edi
+	pushl %ebx
+
+	movl currentCell, %edi
+	movl programMem(, %edi, 4), %ebx
+
+	/* printf("%d", programMem[currentCell]); */
+	pushl %ebx
+	pushl $intFormatStr
+	call printf
+	addl $8, %esp
+
+	/* return 0; */
+	movl $0, %eax
+	popl %ebx
+	popl %edi
 	ret
 
+/* int oom() */
 oom:
+	pushl %edi
+	pushl %ebx
+
+	movl currentCell, %edi
+	leal programMem(, %edi, 4), %ebx
+	
+	/* scanf("%d", programMem[currentCell]); */
+	pushl %ebx
+	pushl $intFormatStr
+	call scanf
+	addl $8, %esp
+
+	/* return 0; */
+	movl $0, %eax
+	popl %ebx
+	popl %edi
 	ret
 
 /* void processCowFile(FILE *filePtr) */

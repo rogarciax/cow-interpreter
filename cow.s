@@ -1,69 +1,37 @@
 .data
-	cowFileErr: 	.string "[ERROR]: file with path '%s' was not found in the system.\n"
-	programUsageMsg:.string "\033[38:5:3mMissing cow file path!\033[m\nUsage: ./cow <program>.cow\n"
-	fileMode:		.string "r"
+	cowFileErr: 	 .string "\033[38:5:1m[ERROR]\033[m: file with path '%s' was not found in the system.\n"
+	programUsageMsg: .string "\033[38:5:3mMissing cow file path!\033[m\nUsage: ./cow <program>.cow\n"
+	cellUnderflowMsg:.string "\033[38:5:1m[ERROR]\033[m: tried to move back to a cell out of bounds \033[38:5:237m(underflow)\033[m."
+	cellOverflowMsg: .string "\033[38:5:1m[ERROR]\033[m: tried to move forward to a cell out of bounds \033[38:5:237m(overflow)\033[m."
+	fileMode:		 .string "r"
 	
-	cowInstSet:		.string "MOO", "MoO", "MOo", "Moo", "MMM"
-					.string "moO", "mOo", "moo", "mOO"
-					.string "OOO", "OOM"
-					.string "oom"
+	cowInstSet:		 .string "moo", "mOo", "moO", "mOO"
+					 .string "Moo", "MOo", "MoO", "MOO"
+					 .string "OOO", "MMM", "OOM", "oom"
 
-	cowInstJmps:	.long MOO
-					.long MoO
-					.long MOo
-					.long Moo
-					.long MMM
+	cowInstJmps:	 .long moo
+					 .long mOo
+					 .long moO
+					 .long mOO
 
-					.long moO
-					.long mOo
-					.long moo
-					.long mOO
+					 .long Moo
+					 .long MOo
+					 .long MoO
+					 .long MOO
 
-					.long OOO
-					.long OOM
+					 .long MOO
+					 .long OOO
+					 .long OOM
+					 .long oom
 
-					.long oom
+	instFormatStr: 	 .string "%3c"
 
-	instFormatStr: 	.string "%3c"
-
-	programMem: 	.space 4096
-	cpyReg:			.int 0
-
+	currentCell: 	 .int 0
+	programMem: 	 .space 4096
+	cpyReg:			 .int 0
 
 .text
 	.global main
-
-/*
-1. Tendremos que leer carácter por carácter.
-2. Se ignoran los espacios en blanco.
-3. Cada vez que nos encontremos una M, m, o u O podemos
-   empezar a procesar la instrucción.
-4. La mejor estrategia es ir descartando posibles
-   instrucciones, cualquier carácter distinto de los
-   anteriores va a formar inmediatamente una instrucción
-   invalida.
-5. En caso contrario, tenemos un árbol de decisión por
-   cada carácter de los que están formadas cada una de las
-   12 instrucciones.
-   m -> 	moo mOo moO mOO
-   mo -> 	moo moO
-   mO -> 	mOo mOO
-
-   M -> 	Moo MOo MoO MOO MMM
-   Mo -> 	Moo MoO
-   MO -> 	MOo MOO
-   MM -> 	MMM
-
-   O -> 	OOO OOM
-   OO -> 	0OO OOM
-
-   o -> 	oom
-6. Necesitamos un bucle que se encargue de tomar caracteres
-   hasta llegar a EOF (%eax = -1) y en el interior del bucle
-   tendremos que ir descartando hasta poder leer 3 caracteres.
-7. Entonces tendremos que encadenar ifs que salten a la etiqueta
-   en la que se ejecute la instrucción en sí misma.
-*/
 
 /* FILE *openCow(const char *path) */
 openCow:
@@ -117,26 +85,88 @@ lower:
 	leave
 	ret
 
-MOO:
-	ret
-MoO:
-	ret
-MOo:
-	ret
-Moo:
-	ret
-MMM:
-
-moO:
-	ret
-mOo:
-	ret
 moo:
 	ret
+
+mOo:
+	/* if (currentCell == 0) */
+	cmpl $0, currentCell
+	jne endmOo
+
+	cellUnderflowErr:
+	pushl %eax
+	pushl %ecx
+	pushl %edx
+
+	/* printf("\033[38:5:1m[ERROR]\033[m: tried to move back to a cell out of bounds \033[38:5:237m(underflow)\033[m."); */
+	pushl $cellUnderflowMsg
+	call printf
+	addl $4, %esp
+
+	popl %eax
+	popl %ecx
+	popl %edx
+
+	endmOo:
+	/* currentCell--; */
+	decl currentCell
+	ret
+
+moO:
+	pushl %eax
+	movl programMem, %eax
+	shl 2, %eax
+
+	/* if (currentCel > programMem / 4) */
+	cmpl %eax, currentCell
+	jle endmOo
+
+	cellOverflowErr:
+	pushl %eax
+	pushl %ecx
+	pushl %edx
+
+	/* printf("\033[38:5:1m[ERROR]\033[m: tried to move forward to a cell out of bounds \033[38:5:237m(overflow)\033[m."); */
+	pushl $cellOverflowMsg
+	call printf
+	addl $4, %esp
+
+	popl %eax
+	popl %ecx
+	popl %edx
+
+	endmOo:
+	/* currentCell++; */
+	incl currentCell
+	popl %eax
+	ret
+
 mOO:
+	ret
+
+Moo:
+	movl currentCel, %edi
+	movl programMem(, %edi, 4), %eax
+
+	cmpl
+
+	ret
+
+MOo:
+	ret
+
+MoO:
+	ret
+
+MOO:
+	ret
+
+MOO:
+	ret
 
 OOO:
 	ret
+
 OOM:
 	ret
 
@@ -169,7 +199,7 @@ processCowFile:
 	cmpl $-1, %eax /* reached EOF */
 	je endProcessCowFile
 
-	/* "%eax" = lower("%eax") */
+	/* "%eax" = lower("%eax"); */
 	pushl %eax
 	call lower
 	addl $4, %esp
@@ -251,7 +281,7 @@ main:
 	movl $1, %eax
 	je endMain
 
-	/* processCowFile(filePtr) */
+	/* processCowFile(filePtr); */
 	pushl -4(%ebp)
 	call processCowFile
 	addl $4, %esp
@@ -263,7 +293,7 @@ main:
 
 	jmp endMain
 
-	/* printf("\033[38:5:3mMissing cow file path!\033[m\nUsage: ./cow <program>.cow\n") */
+	/* printf("\033[38:5:3mMissing cow file path!\033[m\nUsage: ./cow <program>.cow\n"); */
 	printUsageMsg:
 	pushl $programUsageMsg
 	call printf

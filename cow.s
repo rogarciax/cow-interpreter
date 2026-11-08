@@ -191,19 +191,29 @@ processCowFile:
 
 	xor %edi, %edi
 
+	/* do { */
 	checkNextInst:
+	pushl $3
 	leal cowInstSet(, %edi, 4), %ebx
 	pushl %ebx
 	pushl -4(%ebp)
 	call strncmp
-	addl $8, %esp
+	addl $12, %esp
 
-	incl %edi
-
+	/* if (strncmp(instBuff, cowInstset[i], 3) != 0) */
 	cmpl $0, %eax
+	/* continue; */
 	jne checkNextInst
 
-	jmp *cowInstSet(, %edi, 4)
+	/* cowInstSet[i](); */
+	call *cowInstSet(, %edi, 4)
+
+	/* i++ */
+	incl %edi
+	
+	/* } while (i <= 12); */
+	cmpl $12, %edi
+	jg readChar
 
 	endProcessCowFile:
 	popl %edi
